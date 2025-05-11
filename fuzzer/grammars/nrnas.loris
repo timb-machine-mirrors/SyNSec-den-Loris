@@ -1,0 +1,946 @@
+start = { message }
+message = { nrmmMessage }
+nrmmMessage = {
+    regAccept | regReject | deregAcceptMT | deregReq | serviceReject | serviceAccept | 
+    netSSAuthCmd | netSSAuthRes | confUpdCmd | authRequest | authReject | authRes | 
+    identityRequest | securityModeCommand | fgmmStatus | notification | dlNasTransport
+}
+
+// TS 124.501, v17.7.1, section 8.2.7
+regAccept = {
+    regAcceptHdr ~ fgRegRes_T4LV ~ fgGuti_T6TLVE? ~ equivPlmnList_T4TLV? ~ 
+    fgsTaiList_T4TLV? ~ allowedNssai_T4TLV? ~ rejectedNssai_T4TLV? ~ 
+    configuredNssai_T4TLV? ~ fgsNetFeatSupport_T4TLV? ~ pduSessionStatus_T4TLV? ~ 
+    pduSessionReactivRes_T4TLV? ~ pduSessionReactivResErrCause_T6TLVE? ~ ladnInfo_T6TLVE? ~ 
+    micoInd_T1TV? ~ netSlicingInd_T1TV? ~ serviceAreaList_T4TLV? ~ gprsTimer3T3512_T4TLV? ~ 
+    gprsTimer2Non3gppDeregTimer_T4TLV? ~ gprsTimer2T3502_T4TLV? ~ emergNumList_T4TLV? ~ 
+    extEmergNumList_T6TLVE? ~ sorTransparentContainer_T6TLVE? ~ eapMessage_T6TLVE? ~ 
+    nssaiInclusionMode_T1TV? ~ operatorDefAccCat_T6TLVE? ~ negotDrxParam_T4TLV? ~ 
+    epsBearerCtxtStat_T4TLV?
+}
+
+regAcceptHdr = { mmHdr ~ "\x42" }
+
+mmHdr = { "\x7e" ~ "\x00" }
+
+// TS 124.501, v17.7.1, section 9.11.3.6
+fgRegRes_T4LV = { "\x01" ~ octet2 }
+#[self.value = nibble.value << 3 | fgsRegResValue.value]
+octet2 = { nibble ~ fgsRegResValue }
+fgsRegResValue = { "\x01" | "\x02" | "\x03" | "\x05" }
+
+// TS 124.501, v17.7.1, section 9.11.3.4
+#[l2.value = fgGutiValue.length]
+fgGuti_T6TLVE = { "\x77" ~ l2 < fgGutiValue }
+fgGutiValue = { "\xf2" ~ plmn ~ byte{7} }
+
+// TS 124.008, v17.6.0, section 10.5.1.13
+#[l1.value = equivPlmnListValue.length]
+equivPlmnList_T4TLV = { "\x4a" ~ l1 < equivPlmnListValue }
+equivPlmnListValue = { plmn{1,15} }
+
+// TS 124.501, v17.7.1, section 9.11.3.9
+#[l1.value = fgsTaiListValue.length]
+fgsTaiList_T4TLV = { "\x54" ~ l1 < fgsTaiListValue }
+fgsTaiListValue = { partialTaiListChoice{1,3} }
+partialTaiListChoice = { partialTaiList0 | partialTaiList1 | partialTaiList2 }
+#[n1.value = tac.reps - 1]
+partialTaiList0 = { n1 ~ plmn < tac{1,16} }
+partialTaiList1 = { '\x20'..'\x2f' ~ plmnTac }
+#[n1.value = 0x40 | plmnTac.reps - 1]
+partialTaiList2 = { n1 < plmnTac{1,16} }
+plmnTac = {plmn ~ tac}
+plmn = { numberDigits ~ (numberDigits | bcdNumberDigits) ~ numberDigits }
+tac = { byte{2} }
+
+// TS 124.501, v17.7.1, section 9.11.3.37
+#[l1.value = allowedNssaiValue.length]
+allowedNssai_T4TLV = { "\x15" ~ l1 < allowedNssaiValue }
+allowedNssaiValue = { sNssai_T4LV{1,16} }
+// TS 124.501, v17.7.1, section 9.11.2.8
+sNssai_T4LV = { 
+    ("\x01" ~ byte) |
+    ("\x02" ~ byte{2}) |
+    ("\x04" ~ byte{4}) |
+    ("\x05" ~ byte{5}) |
+    ("\x08" ~ byte{8})
+}
+sNssaiNoMapped_T4LV = {
+    ("\x01" ~ byte) |
+    ("\x02" ~ byte{2}) |
+    ("\x04" ~ byte{4})
+}
+
+// TS 124.501, v17.7.1, section 9.11.3.46
+#[l1.value = rejectedNssaiValue.length]
+rejectedNssai_T4TLV = { "\x11" ~ l1 < rejectedNssaiValue }
+rejectedNssaiValue = { rejectedSNssaiValue{1,8} }
+rejectedSNssaiValue = {
+    ("\x40" ~ byte{4}) | ("\x41" ~ byte{4}) | ("\x42" ~ byte{4}) | ("\x10" ~ byte) | ("\x11" ~ byte)
+}
+
+// TS 124.501, v17.7.1, section 9.11.3.37
+#[l1.value = configuredNssaiValue.length]
+configuredNssai_T4TLV = { "\x31" ~ l1 < configuredNssaiValue }
+configuredNssaiValue = { sNssai_T4LV{1,16} }
+
+// TS 124.501, v17.7.1, section 9.11.3.5
+#[l1.value = fgsNetFeatSupportValue.length]
+fgsNetFeatSupport_T4TLV = { "\x21" ~ l1 < fgsNetFeatSupportValue }
+fgsNetFeatSupportValue = { byte{2} ~ bits7 }
+
+// TS 124.501, v17.7.1, section 9.11.3.44
+#[l1.value = pduSessionStatusValue.length]
+pduSessionStatus_T4TLV = {
+    "\x50" ~ l1 < pduSessionStatusValue
+}
+#[octet3.value &= "\xfe"]
+pduSessionStatusValue = {
+    octet3 ~ byte ~ zero{0,30}
+}
+octet3 = { byte }
+
+// TS 124.501, v17.7.1, section 9.11.3.42
+#[l1.value = pduSessionStatusValue.length]
+pduSessionReactivRes_T4TLV = {
+    "\x26" ~ l1 < pduSessionStatusValue
+}
+
+// TS 124.501, v17.7.1, section 9.11.3.43
+#[l2.value = pduSessionReactivResErrCauseValue.length]
+pduSessionReactivResErrCause_T6TLVE = {
+    "\x72" ~ l2 < pduSessionReactivResErrCauseValue
+}
+pduSessionReactivResErrCauseValue = {
+    pduSessionIdCausePair{1,64}
+}
+pduSessionIdCausePair = {
+    pduSessionId ~ fgmmCauseValue
+}
+// TS 124.007, v17.7.1, section 11.2.3.1b
+pduSessionId = { '\x01'..'\x0f' }
+// TS 124.501, v17.7.1, section 9.11.3.2
+fgmmCauseValue = {
+    "\x03" | "\x05" | "\x06" | "\x07" | "\x09" | "\x0a" | "\x0b" | "\x0c" | 
+    "\x0d" | "\x0f" | "\x14" | "\x15" | "\x16" | "\x17" | "\x18" | "\x1a" | 
+    "\x1b" | "\x1c" | "\x1f" | "\x2b" | "\x3e" | "\x41" | "\x43" | "\x45" | 
+    "\x47" | "\x48" | "\x49" | "\x4a" | "\x4b" | "\x4c" | "\x4d" | "\x4e" | 
+    "\x4f" | "\x5a" | "\x50" | "\x5b" | "\x5c" | "\x5d" | "\x5f" | "\x60" | 
+    "\x61" | "\x62" | "\x63" | "\x64" | "\x65" | "\x6f"
+}
+
+// TS 124.501, v17.7.1, section 9.11.3.30
+#[l2.value = ladnInfoValue.length]
+ladnInfo_T6TLVE = {
+    "\x79" ~ l2 < ladnInfoValue
+}
+ladnInfoValue = {
+    ladn{0,8}
+}
+ladn = {
+    dnn_T4LV ~ fgsTaiList_T4LV?
+}
+// TS 124.501, v17.7.1, section 9.11.2.1B
+#[l1.value = dnnValue.length]
+dnn_T4LV = {
+    l1 < dnnValue
+}
+dnnValue = { byte{1,16} }
+#[l1.value = fgsTaiListValue.length]
+fgsTaiList_T4LV = {
+    l1 < fgsTaiListValue
+}
+
+// TS 124.501, v17.7.1, section 9.11.3.31
+micoInd_T1TV = {
+    "\xb0" | "\xb1" | "\xb2" | "\xb3"
+}
+
+// TS 124.501, v17.7.1, section 9.11.3.36
+netSlicingInd_T1TV = {
+    "\x90" | "\x91" | "\x92" | "\x93"
+}
+
+// TS 124.501, v17.7.1, section 9.11.3.49
+#[l1.value = serviceAreaListValue.length]
+serviceAreaList_T4TLV = {
+    "\x27" ~ l1 < serviceAreaListValue
+}
+// Allowd type for type of list '00' and '10' is not implemented
+serviceAreaListValue = { partialServiceAreaListChoice{1,3} }
+partialServiceAreaListChoice = {
+    partialTaiList0 | partialServiceAreaList1 | partialTaiList2 | partialServiceAreaList3
+}
+partialServiceAreaList1 = { ('\x20'..'\x2f' | '\xa0'..'\xaf') ~ plmnTac }
+partialServiceAreaList3 = { ('\x60'..'\x6f' | '\xe0'..'\xef') ~ plmn }
+
+// TS 124.008, v17.6.0, section 10.5.7.4a
+#[l1.value = gprsTimer3Value.length]
+gprsTimer3T3512_T4TLV = { "\x5e" ~ l1 < gprsTimer3Value }
+#[self.value = timer3Unit.value << 5 | timer3Value.value]
+gprsTimer3Value = { timer3Unit ~ timer3Value }
+timer3Unit = { "\x00" | "\x01" | "\x02" | "\x03" | "\x04" | "\x05" | "\x06" | "\x07" }
+timer3Value = _{ timerValue }
+
+// TS 124.008, v17.6.0, section 10.5.7.4
+#[l1.value = gprsTimer2Value.length]
+gprsTimer2Non3gppDeregTimer_T4TLV = { "\x5d" ~ l1 < gprsTimer2Value }
+#[l1.value = gprsTimer2Value.length]
+gprsTimer2T3324_T4TLV = { "\x6a" ~ l1 < gprsTimer2Value }
+gprsTimer2Value = _{ gprsTimerValue }
+#[self.value = timerUnit.value << 5 | timerValue.value]
+gprsTimerValue = { timerUnit ~ timerValue }
+timerUnit = { "\x00" | "\x01" | "\x02" | "\x07"}
+timerValue = { '\x00'..'\x1f' }
+
+// TS 124.008, v17.6.0, section 10.5.7.4
+#[l1.value = gprsTimer2Value.length]
+gprsTimer2T3502_T4TLV = { "\x16" ~ l1 < gprsTimer2Value }
+
+// TS 124.008, v17.6.0, section 10.5.3.13
+#[l1.value = emergNumListValue.length]
+emergNumList_T4TLV = { "\x34" ~ l1 < emergNumListValue }
+emergNumListValue = { emergNumInfo{1, 7} }  // WARN: it may exceed the maximum allowed length, 48.
+#[l1.value = emergNumInfoValue.length]
+emergNumInfo = { l1 < emergNumInfoValue }
+emergNumInfoValue = { emergServCatValue ~ emergNumber }
+emergServCatValue = {
+    "\x01" |  // Police
+    "\x02" |  // Ambulance
+    "\x04" |  // Fire Brigade
+    "\x08" |  // Marine Guard
+    "\x10"    // Mountain Rescue
+}
+emergNumber = { numberDigits{1, 9} ~ (numberDigits | bcdNumberDigits)}
+
+// TS 124.301, v17.6.0, section 9.9.3.37A
+#[l2.value = extEmergNumListValue.length]
+extEmergNumList_T6TLVE = { "\x7a" ~ l2 < extEmergNumListValue }
+// WARM: not sure how much of input size fuzzer can handle
+extEmergNumListValue = { bit ~ extEmergNumListInfo{1,16} }
+extEmergNumListInfo = { extEmergNumInfo ~ subService }
+#[l1.value = emergNumber.length]
+extEmergNumInfo = { l1 < emergNumber }
+#[l1.value = subServiceValue.length]
+subService = { l1 < subServiceValue }
+// WARM: the length is not limited by the specification
+subServiceValue = { ASCII_ALPHANUMERIC{0,100} }
+
+// TS 124.501, v17.7.1, section 9.11.3.51
+#[l2.value = sorTransparentContainerValue.length]
+sorTransparentContainer_T6TLVE = {
+    "\x73" ~ l2 < sorTransparentContainerValue
+}
+
+// TS 124.501, v17.7.1, section 9.11.2.2
+#[l2.value = eapMessageValue.length]
+eapMessage_T6TLVE = {
+    "\x78" ~ l2 < eapMessageValue
+}
+eapMessageValue = { byte{4,1500} }
+
+// TS 124.501, v17.7.1, section 9.11.3.37A
+nssaiInclusionMode_T1TV = { 
+    "\xa0" | "\xa1" | "\xa2" | "\xa3"
+}
+
+// TS 124.501, v17.7.1, section 9.11.3.38
+#[l2.value = operatorDefAccCatValue.length]
+operatorDefAccCat_T6TLVE = {
+    "\x76" ~ l2 < operatorDefAccCatValue
+}
+operatorDefAccCatValue = {
+    operatorDefAccCatDefinition{1,8}
+}
+#[l1.value = operatorDefAccCatDefinitionValue.length]
+operatorDefAccCatDefinition = {
+    l1 < operatorDefAccCatDefinitionValue
+}
+#[octet6.value &= "\x9f"]
+operatorDefAccCatDefinitionValue = {
+    precedenceValue ~ octet6 ~ criteria_T4LV ~ standardAccessCat
+}
+precedenceValue = { byte }
+octet6 = { byte }
+#[l1.value = criteriaValue.length]
+criteria_T4LV = {
+    l1 < criteriaValue
+}
+criteriaValue = {
+    criteriaComponent{1,2}
+}
+criteriaComponent = {
+    "\x00" ~ criteriaDnnValue |
+    "\x01" ~ criteriaOsAppIdValue |
+    "\x02" ~ criteriaSNssaiValue
+}
+#[n1.value = dnn_T4LV.reps]
+criteriaDnnValue = {
+    n1 < dnn_T4LV{1,7}
+}
+#[n1.value = appIdValue.reps]
+criteriaOsAppIdValue = {
+    n1 < appIdValue{1,3}
+}
+appIdValue = {
+    osId ~ osAppId_T4LV
+}
+osId = { byte{16} }
+#[l1.value = osAppIdValue.length]
+osAppId_T4LV = {
+    l1 < osAppIdValue
+}
+osAppIdValue = {
+    byte{0,16}
+}
+#[n1.value = sNssai_T4LV.reps]
+criteriaSNssaiValue = {
+    n1 < sNssai_T4LV{1,13}
+}
+standardAccessCat = { '\x00'..'\x0a' }
+
+// TS 124.501, v17.7.1, section 9.11.3.2A
+#[l1.value = negotDrxParamValue.length]
+negotDrxParam_T4TLV = { "\x51" ~ l1 < negotDrxParamValue }
+negotDrxParamValue = { '\x00'..'\x04' }
+
+// TS 124.301, v17.6.0, section 9.9.2.1
+#[l1.value = epsBearerCtxtStatValue.length]
+epsBearerCtxtStat_T4TLV = { "\x60" ~ l1 < epsBearerCtxtStatValue }
+#[octet3.value &= "\xfe"]
+epsBearerCtxtStatValue = { octet3 ~ byte }
+
+// TS 124.501, v17.7.1, section 8.2.9
+regReject = {
+    regRejectHdr ~ fgmmCauseValue ~ gprsTimer2T3346_T4TLV? ~ gprsTimer2T3502_T4TLV? ~ 
+    eapMessage_T6TLVE?
+}
+
+regRejectHdr = { mmHdr ~ "\x44" }
+
+// TS 124.008, v17.6.0, section 10.5.7.4
+#[l1.value = gprsTimer2Value.length]
+gprsTimer2T3346_T4TLV = { "\x5f" ~ l1 < gprsTimer2Value }
+
+#[l2.value = cagInfoListValue.length]
+cagInfoList_T6TLVE = {
+    "\x75" ~ l2 < cagInfoListValue
+}
+cagInfoListValue = {
+    cagInfoListEntry_T4LV{0,16}
+}
+#[l1.value = cagInfoListEntryValue.length]
+cagInfoListEntry_T4LV = {
+    l1 < cagInfoListEntryValue
+}
+cagInfoListEntryValue = {
+    plmn ~ bit ~ cagId{0,32}
+}
+cagId = { byte{4} }
+
+// TS 124.501, v17.7.1, section 9.11.3.75
+#[l1.value = extRejectedNssaiValue.length]
+extRejectedNssai_T4TLV = {
+    "\x68" ~ l1 < extRejectedNssaiValue
+}
+extRejectedNssaiValue = {
+    partialExtRejectedNssaiListChoice{1,16}
+}
+partialExtRejectedNssaiListChoice = {
+    partialExtRejectedNssaiList0 | partialExtRejectedNssaiList1
+}
+#[n1.value = rejectedSNssaiValue.reps]
+partialExtRejectedNssaiList0 = {
+    n1 < rejectedSNssaiValue{1,8}
+}
+#[n1.value = 0x1 | extRejectedSNssaiValue.reps]
+partialExtRejectedNssaiList1 = {
+    n1 ~ gprsTimer3Value < extRejectedSNssaiValue{1,8}
+}
+extRejectedSNssaiValue = {
+    ("\x43" ~ byte{4}) | ("\x13" ~ byte)
+}
+
+// TS 124.501, v17.7.1, section 8.2.15
+deregAcceptMT = {
+    deregAcceptMTHdr
+}
+
+deregAcceptMTHdr = { mmHdr ~ "\x48" }
+
+// TS 124.501, v17.7.1, section 8.2.14
+deregReq = {
+    deregReqHdr ~ deregTypeToUe ~ fgmmCause_T3TV? ~ gprsTimer2T3346_T4TLV?
+}
+
+deregReqHdr = { mmHdr ~ "\x47" }
+
+// TS 124.501, v17.7.1, section 9.11.3.20 
+deregTypeToUe = { "\x01" | "\x02" | "\x03" | "\x05" | "\x06" | "\x07"}
+
+fgmmCause_T3TV = { "\x58" ~ fgmmCauseValue }
+
+// TS 124.501, v17.7.1, section 8.2.18
+serviceReject = {
+    serviceRejectHdr ~ fgmmCauseValue ~ pduSessionStatus_T4TLV? ~ gprsTimer2T3346_T4TLV? ~ 
+    eapMessage_T6TLVE?
+}
+
+serviceRejectHdr = { mmHdr ~ "\x4d" }
+
+// TS 124.501, v17.7.1, section 8.2.17
+serviceAccept = {
+    serviceAcceptHdr ~ pduSessionStatus_T4TLV? ~ pduSessionReactivRes_T4TLV? ~ 
+    pduSessionReactivResErrCause_T6TLVE? ~ eapMessage_T6TLVE?
+}
+
+serviceAcceptHdr = { mmHdr ~ "\x4e" }
+
+// TS 124.501, v17.7.1, section 8.2.31
+netSSAuthCmd = {
+    netSSAuthCmdHdr ~ sNssaiNoMapped_T4LV ~ eapMessage_T6LVE
+}
+
+netSSAuthCmdHdr = { mmHdr ~ "\x50" }
+
+// TS 124.501, v17.7.1, section 9.11.2.2
+#[l2.value = eapMessageValue.length]
+eapMessage_T6LVE = {
+    l2 < eapMessageValue
+}
+
+// TS 124.501, v17.7.1, section 8.2.33
+netSSAuthRes = {
+    netSSAuthResHdr ~ sNssaiNoMapped_T4LV ~ eapMessage_T6LVE
+}
+
+netSSAuthResHdr = { mmHdr ~ "\x52" }
+
+// TS 124.501, v17.7.1, section 8.2.19
+confUpdCmd = {
+    confUpdCmdHdr ~ confUpdInd_T1TV? ~ fgGuti_T6TLVE? ~ fgsTaiList_T4TLV? ~ allowedNssai_T4TLV? ~ 
+    serviceAreaList_T4TLV? ~ fullNetName_T4TLV? ~ shortNetName_T4TLV? ~ localTimeZone_T3TV? ~ 
+    univTimeAndTimeZone_T3TV? ~ dlSavingTime_T4TLV? ~ ladnInfo_T6TLVE? ~ micoInd_T1TV? ~ 
+    netSlicingInd_T1TV? ~ configuredNssai_T4TLV? ~ rejectedNssai_T4TLV? ~ 
+    operatorDefAccCat_T6TLVE? ~ smsInd_T3TV?
+}
+
+confUpdCmdHdr = { mmHdr ~ "\x54" }
+
+confUpdInd_T1TV = {
+    "\xd0" | "\xd1" | "\xd2" | "\xd3"
+}
+
+// TS 124.008, v17.6.0, section 10.5.3.5a
+#[l1.value = fullNetNameValue.length]
+fullNetName_T4TLV = { "\x43" ~ l1 < fullNetNameValue }
+fullNetNameValue = { '\x80'..'\xff' ~ byte{0,254} }
+
+// TS 124.008, v17.6.0, section 10.5.3.5a
+#[l1.value = fullNetNameValue.length]
+shortNetName_T4TLV = { "\x45" ~ l1 < fullNetNameValue }
+
+// TS 124.008, v17.6.0, section 10.5.3.8
+localTimeZone_T3TV = { "\x46" ~ byte }
+
+// TS 124.008, v17.6.0, section 10.5.3.9
+univTimeAndTimeZone_T3TV = { "\x47" ~ byte{7} }
+
+// TS 124.008, v17.6.0, section 10.5.3.12
+#[l1.value = dlSavingTimeValue.length]
+dlSavingTime_T4TLV = { "\x49" ~ l1 < dlSavingTimeValue }
+dlSavingTimeValue = {
+    "\x00" |  // No adjustment for Daylight Saving Time
+    "\x01" |  // +1 hour adjustment for Daylight Saving Time
+    "\x02" |  // +2 hours adjustment for Daylight Saving Time 
+    "\x03"    // Reserved
+}
+
+// TS 124.501, v17.7.1, section 9.11.3.50A
+smsInd_T3TV = {
+    "\xf0" | "\xf1"
+}
+
+// TS 124.501, v17.7.1, section 8.2.1
+authRequest = {
+    authRequestHdr ~ nasKsi_T1V ~ abba_T4LV ~ rand_T3TV? ~ autn_T4TLV? ~ eapMessage_T6TLVE?
+}
+
+authRequestHdr = { mmHdr ~ "\x56" }
+
+// TS 124.501, v17.7.1, section 9.11.3.32
+nasKsi_T1V = { nibble }
+
+// TS 124.501, v17.7.1, section 9.11.3.10
+#[l1.value = abbaValue.length]
+abba_T4LV = {
+    l1 < abbaValue
+}
+abbaValue = { byte{0,255} }
+
+// TS 124.008, v17.6.0, section 10.5.3.1
+rand_T3TV = { "\x21" ~ byte{16} }
+
+// TS 124.008, v17.6.0, section 10.5.3.1.1
+#[l1.value = autnValue.length]
+autn_T4TLV = {
+    "\x20" ~ l1 < autnValue
+}
+autnValue = { sqnXorAk ~ amf ~ mac }
+sqnXorAk = { byte{6} }
+amf = { byte{2} }
+mac = { byte{8} }
+
+// TS 124.501, v17.7.1, section 8.2.5
+authReject = {
+    authRejectHdr ~ eapMessage_T6TLVE?
+}
+
+authRejectHdr = { mmHdr ~ "\x58" }
+
+// TS 124.501, v17.7.1, section 8.2.3
+authRes = {
+    authResHdr ~ nasKsi_T1V ~ eapMessage_T6LVE ~ abba_T4TLV?
+}
+
+authResHdr = { mmHdr ~ "\x5a" }
+
+#[l1.value = abbaValue.length]
+abba_T4TLV = {
+    "\x38" ~ l1 < abbaValue
+}
+
+// TS 124.501, v17.7.1, section 8.2.21
+identityRequest = {
+    identityRequestHdr ~ fgsIdentityType_T1V
+}
+
+identityRequestHdr = { mmHdr ~ "\x5b" }
+
+// TS 124.501, v17.7.1, section 9.11.3.3
+fgsIdentityType_T1V = {
+    "\x01" | "\x02" | "\x03" | "\x04" | "\x05" | "\x06" | "\x07"
+}
+
+// TS 124.501, v17.7.1, section 8.2.25
+securityModeCommand = {
+    securityModeCommandHdr ~ nasSecAlgo_T3V ~ nasKsi_T1V ~ ueSecCap_T4LV ~ imeisvReq_T1TV? ~ 
+    nasSecAlgo_T3TV? ~ addInfoRequested_T4TLV? ~ eapMessage_T6TLVE? ~ abba_T4TLV? ~ ueSecCap_T4TLV?
+}
+
+securityModeCommandHdr = { mmHdr ~ "\x5d" }
+
+// TS 124.501, v17.7.1, section 9.11.3.34
+#[self.value = "\x77" & byte.value]
+nasSecAlgo_T3V = { byte }
+nasSecAlgo_T3TV = { "\x57" ~ nasSecAlgo_T3V}
+
+// TS 124.501, v17.7.1, section 9.11.3.54
+#[l1.value = ueSecCapValue.length]
+ueSecCap_T4LV = { l1 < ueSecCapValue }
+ueSecCapValue = { eea ~ eia ~ (uea ~ uia ~ gea?)? }
+eea = { byte }
+eia = { byte }
+uea = { byte }
+uia = { bits7 }
+gea = { bits7 }
+
+// TS 124.008, v17.6.0, section 10.5.5.10
+imeisvReq_T1TV = {
+    "\xe0" |  // IMEISV not requested
+    "\xe1"    // IMEISV requested
+}
+
+// TS 124.501, v17.7.1, section 9.11.3.12
+addInfoRequested_T4TLV = {
+    "\x36" ~ "\x01" ~ bit
+}
+
+#[l1.value = ueSecCapValue.length]
+ueSecCap_T4TLV = {
+    "\x19" ~ l1 < ueSecCapValue
+}
+
+// TS 124.501, v17.7.1, section 8.2.29
+fgmmStatus = {
+    fgmmStatusHdr ~ fgmmCauseValue
+}
+
+fgmmStatusHdr = { mmHdr ~ "\x64" }
+
+// TS 124.501, v17.7.1, section 8.2.23
+notification = {
+    notificationHdr ~ accessTypeValue
+}
+
+notificationHdr = { mmHdr ~ "\x65" }
+
+// TS 124.501, v17.7.1, section 9.11.2.1A
+accessTypeValue = {
+    "\x01" | "\x02"
+}
+
+// TS 124.501, v17.7.1, section 8.2.11
+dlNasTransport = {
+    dlNasTransportHdr ~ payloadContainer_T6TLVE ~ pduSessionId_T3TV? ~ addInfo_T4TLV? ~ 
+    fgmmCause_T3TV? ~ gprsTimer3BackOff_T4TLV?
+}
+
+dlNasTransportHdr = { mmHdr ~ "\x68" }
+
+// payloadContainer_T6TLVE = {
+//     payloadContainerEntry | "\x0f" ~ containerMultiple
+// }
+
+// TS 124.501, v17.7.1, section 9.11.3.40
+payloadContainer_T6TLVE = {
+    "\x01" ~ containerN1SmInfo | 
+    "\x02" ~ containerSms | 
+    "\x03" ~ containerLppMsg | 
+    "\x04" ~ sorTransparentContainerValue | 
+    "\x05" ~ containerUePolicy | 
+    "\x06" ~ containerUpuTransparent | 
+    "\x0f" ~ containerMultiple
+}
+#[l2.value = containerN1SmInfoValue.length]
+containerN1SmInfo = { l2 < containerN1SmInfoValue }
+// containerN1SmInfoValue = { byte{1,4095} }  // SM Message
+containerN1SmInfoValue = { nrsmMessage }  // SM Message
+#[l2.value = containerSmsValue.length]
+containerSms = { l2 < containerSmsValue }
+containerSmsValue = { byte{600} }
+#[l2.value = containerLppMsgValue.length]
+containerLppMsg = { l2 < containerLppMsgValue }
+containerLppMsgValue = { byte{600} } // LTE Positioning Protocol (LPP) message payload
+
+// TS 124.501, v17.7.1, section 9.11.3.51
+sorTransparentContainerValue = {
+    sorHdr ~ sorMac ~ sorCounter ~ sorSecuredPacket
+}
+#[octet1.value <<= 0x1]
+sorHdr = { octet1 }
+octet1 = { nibble }
+sorMac = { byte{16} }
+sorCounter = { byte{2} }
+sorSecuredPacket = { byte{600} }
+
+#[l2.value = containerUePolicyValue.length]
+containerUePolicy = { l2 < containerUePolicyValue }
+containerUePolicyValue = { byte{600} } // subclause Annex D
+
+// TS 124.501, v17.7.1, section 9.11.3.53A
+containerUpuTransparent = {
+    upuHdr ~ upuMac ~ upuCounter ~ upuList
+}
+upuHdr = { "\x00" | "\x02" | "\x04" | "\x06" }
+upuMac = { byte{16} }
+upuCounter = { byte{2} }
+upuList = {
+    upuListEntry{1,16}
+}
+#[l2.value = upuDataSetValue.length]
+upuListEntry = {
+    upuDataSetType ~ l2 < upuDataSetValue
+}
+upuDataSetType = { "\x01" | "\x02" | "\x03" | "\x04" }
+upuDataSetValue = { byte{600} }
+
+#[l2.value = containerMultipleValue.length]
+containerMultiple = { l2 < containerMultipleValue}
+#[n1.value = payloadContainerEntry_T6LVE.reps]
+containerMultipleValue = {
+    n1 < payloadContainerEntry_T6LVE{1,8}
+}
+payloadContainerEntry_T6LVE = {
+    l2 < payloadContainerEntryValue
+}
+
+payloadContainerEntryValue = {
+    // "\x01" ~ containerN1SmInfo |  // incorrect number of IEs
+    "\x02" ~ containerSms | 
+    "\x03" ~ containerLppMsg | 
+    "\x04" ~ sorTransparentContainerValue | 
+    "\x05" ~ containerUePolicy | 
+    "\x06" ~ containerUpuTransparent
+}
+
+
+// TS 124.501, v17.7.1, section 9.11.3.41
+pduSessionId_T3TV = { "\x12" ~ pduSessionId }
+
+// TS 124.501, v17.7.1, section 9.11.2.1
+addInfo_T4TLV = {
+    "\x24" ~ "\x01" ~ byte
+}
+
+// TS 124.008, v17.6.0, section 10.5.7.4a
+#[l1.value = gprsTimer3Value.length]
+gprsTimer3BackOff_T4TLV = { "\x37" ~ l1 < gprsTimer3Value }
+
+#[self.value = firstNumberDigit.value << 4 | secondNumberDigit.value]
+numberDigits = { firstNumberDigit ~ secondNumberDigit }
+firstNumberDigit = _{ numberDigit }
+secondNumberDigit = _{ numberDigit }
+#[self.value = "\xf0" | numberDigit.value]
+bcdNumberDigits = { numberDigit }
+
+zero = _{ "\x00" }
+byte = _{ '\x00'..'\xff' }
+nibble = _{ '\x00'..'\x0f' }
+bit = _{ "\x00" | "\x01" }
+bits2 = _{ '\x00'..'\x03' }
+bits7 = _{ '\x00'..'\x7f' }
+numberDigit = { '\x00'..'\x09' }
+l1 = _{ "L" }
+l2 = _{ "LL" }
+n1 = _{ "N" }
+
+nrsmMessage = {
+    estAccept | estReject | authCmd | smAuthResult | modifReject | modifCmd | releaseReject | 
+    releaseCmd | fgsmStatus
+}
+
+estAccept = {
+    estAcceptHdr ~ sscMode_pduSessionType ~ qosRules_T6LVE ~ sessionAmbr_T4LV ~ fgsmCause_T3TV? ~ 
+    pduAddress_T4TLV? ~ gprsTimerRqTimer_T3TV? ~ sNssai_T4TLV? ~ alwaysOnPduSessionInd_T1TV? ~ 
+    mappedEpsBearerContexts_T6TLVE? ~ eapMessage_T6TLVE? ~ qosFlowDescriptions_T6TLVE? ~ 
+    extProtoConfOptions_T6TLVE? ~ dnn_T4TLV?
+}
+
+estAcceptHdr = { smHdr ~ "\xc2" }
+
+smHdr = { "\x2e" ~ "\x06" ~ "\x00" }
+
+#[self.value = sscMode.value << 4 | pduSessionType.value]
+sscMode_pduSessionType = {
+    sscMode ~ pduSessionType
+}
+pduSessionType = { '\x01'..'\x05' }
+sscMode = { '\x01'..'\x06' }
+
+#[l2.value = qosRuleListValue.length]
+qosRules_T6LVE = {
+    l2 < qosRuleListValue
+}
+qosRuleListValue = { qosRule{1,17} }
+#[l2.value = qosRuleValue.length]
+qosRule = {
+    qosRuleId ~ l2 < qosRuleValue
+}
+qosRuleId = { byte }
+qosRuleValue = {
+    (packetFilterList1 | packetFilterList2 | packetFilterList3) ~ qosRulePrecedence ~ bits7
+}
+#[ruleOpCode1.value |= packetFilter1.reps]
+packetFilterList1 = {
+    ruleOpCode1 < packetFilter1{1,15}
+}
+ruleOpCode1 = {
+    "\xa0" | "\xb0"
+}
+packetFilter1 = {
+    nibble
+}
+#[ruleOpCode2.value |= packetFilter2.reps]
+packetFilterList2 = {
+    ruleOpCode2 < packetFilter2{1,15}
+}
+ruleOpCode2 = {
+    "\x20" | "\x30" | "\x60" | "\x70" | "\x80" | "\x90"
+}
+#[l1.value = packetFilter2Value.length]
+packetFilter2 = {
+    packetFilterDir ~ l1 < packetFilter2Value
+}
+packetFilterDir = {
+    "\x10" | "\x20" | "\x30"
+}
+packetFilter2Value = {
+    packetFilterComponent{1,14}
+}
+packetFilterComponent = {
+    "\x01" |
+    (("\x10" | "\x11") ~ byte{8}) |
+    (("\x21" | "\x23") ~ byte{17}) |
+    (("\x30" | "\x85" | "\x86") ~ byte) |
+    (("\x40" | "\x50" | "\x70" | "\x83" | "\x84" | "\x87") ~ byte{2}) |
+    (("\x41" | "\x51" | "\x60") ~ byte{4}) |
+    ("\x80" ~ byte{3}) |
+    (("\x81" | "\x82") ~ byte{6}) |
+    (("\x88" | "\x89") ~ byte{12})
+}
+packetFilterList3 = {
+    ruleOpCode3
+}
+ruleOpCode3 = {
+    "\x40" | "\x50" | "\xc0" | "\xd0"
+}
+
+qosRulePrecedence = { byte }
+
+sessionAmbr_T4LV = {
+    "\x06" ~ byte{6}
+}
+
+fgsmCause_T3TV = { "\x59" ~ fgsmCauseValue }
+fgsmCauseValue = {
+    "\x08" | "\x1a" | "\x1b" | "\x1c" | "\x1d" | "\x1f" | "\x20" | "\x21" | "\x23" | "\x24" | 
+    "\x25" | "\x26" | "\x27" | "\x29" | "\x2a" | "\x2b" | "\x2c" | "\x2d" | "\x2e" | "\x2f" | 
+    "\x32" | "\x33" | "\x36" | "\x39" | "\x3a" | "\x3b" | "\x3d" | "\x43" | "\x44" | "\x45" | 
+    "\x46" | "\x51" | "\x52" | "\x53" | "\x54" | "\x55" | "\x56" | "\x5f" | "\x60" | "\x61" |
+    "\x62" | "\x63" | "\x64" | "\x65" | "\x6f"
+}
+
+#[l1.value = pduAddressValue.length]
+pduAddress_T4TLV = { "\x29" ~ l1 < pduAddressValue }
+pduAddressValue = {
+    (("\x01" ~ byte{4}) | ("\x09" ~ byte{20})) | 
+    (("\x02" ~ byte{8}) | ("\x0a" ~ byte{24})) |
+    (("\x03" ~ byte{12}) | ("\x0b" ~ byte{28}))
+}
+
+gprsTimerRqTimer_T3TV = { "\x56" ~ gprsTimerValue }
+
+sNssai_T4TLV = { "\x22" ~ sNssai_T4LV }
+
+alwaysOnPduSessionInd_T1TV = { "\x80" | "\x81" }
+
+#[l2.value = mappedEpsBearerContextsValue.length]
+mappedEpsBearerContexts_T6TLVE = { "\x75" ~ l2 < mappedEpsBearerContextsValue }
+mappedEpsBearerContextsValue = {
+    mappedEpsBearerContext{1,16}
+}
+#[l2.value = epsParameterList.length]
+mappedEpsBearerContext = {
+    epsbearerId ~ l2 < epsParameterList
+}
+#[nibble.value <<= 4]
+epsbearerId = {
+    nibble
+}
+#[epsParameterOpCode.value |= epsParameter.reps]
+epsParameterList = {
+    epsParameterOpCode < epsParameter{1,15}
+}
+epsParameterOpCode = {
+    "\x40" | "\x50" | "\x80" | "\x90" | "\xc0" | "\xd0"
+}
+#[l1.value = epsParameterContent.length]
+epsParameter = {
+    epsParameterId ~ l1 < epsParameterContent
+}
+epsParameterId = { '\x01'..'\x05' }
+epsParameterContent = { byte{1,255} }
+
+#[l2.value = qosFlowDescriptionsValue.length]
+qosFlowDescriptions_T6TLVE = { "\x79" ~ l2 < qosFlowDescriptionsValue }
+qosFlowDescriptionsValue = {
+    qosFlowDescription{1,16}
+}
+qosFlowDescription = { qfi ~ qosFlowDescriptionParameterList }
+qfi = { '\x00'..'\x3f' }
+qosFlowDescriptionParameterList = { 
+    ("\x20" ~ qosFlowDescriptionParameterList1) |
+    ("\x40" ~ "\x00") |
+    ("\x60" ~ qosFlowDescriptionParameterList2)
+}
+#[qosFlowDescriptionParameterListOpCode1.value |= qosFlowDescriptionParameter.reps]
+qosFlowDescriptionParameterList1 = {
+    qosFlowDescriptionParameterListOpCode1 < qosFlowDescriptionParameter{1,16}
+}
+qosFlowDescriptionParameterListOpCode1 = { "\x40" }
+qosFlowDescriptionParameter = { 
+    (("\x01" | "\x07") ~ "\x01" ~ byte) |
+    (("\x02" | "\x03" | "\x04" | "\x05") ~ "\x03" ~ byte{3}) |
+    ("\x06" ~ "\x01" ~ byte)
+}
+#[qosFlowDescriptionParameterListOpCode2.value |= qosFlowDescriptionParameter.reps]
+qosFlowDescriptionParameterList2 = {
+    qosFlowDescriptionParameterListOpCode2 < qosFlowDescriptionParameter{1,16}
+}
+qosFlowDescriptionParameterListOpCode2 = { "\x40" | "\x00" }
+
+#[l2.value = extProtoConfOptionsValue.length]
+extProtoConfOptions_T6TLVE = { "\x7b" ~ l2 < extProtoConfOptionsValue }
+extProtoConfOptionsValue = { byte{1,4095} }
+
+dnn_T4TLV = { "\x25" ~ dnn_T4LV }
+
+estReject = {
+    estRejectHdr ~ fgsmCauseValue ~ gprsTimer3BackOff_T4TLV? ~ allowedSscMode_T3TV? ~ 
+    eapMessage_T6TLVE? ~ fgsmCongestionReattemptInd_T4TLV?
+}
+
+estRejectHdr = { smHdr ~ "\xc3" }
+
+allowedSscMode_T3TV = { "\xf0" ~ "\xf1" ~ "\xf2" ~ "\xf3" ~ "\xf4" ~ "\xf5" ~ "\xf6" ~ "\xf7" }
+
+#[l1.value = fgsmCongestionReattemptIndValue.length]
+fgsmCongestionReattemptInd_T4TLV = { "\x61" ~ "\x01" ~ fgsmCongestionReattemptIndValue }
+fgsmCongestionReattemptIndValue = { "\x00" | "\x01" | "\x02" | "\x03" }
+
+authCmd = {
+    authCmdHdr ~ eapMessage_T6LVE ~ extProtoConfOptions_T6TLVE? ~ remoteUeHandlingInformationList_T6TLVE?
+}
+
+authCmdHdr = { smHdr ~ "\xc5" }
+
+#[l2.value = remoteUeHandlingInformationListValue.length]
+remoteUeHandlingInformationList_T6TLVE = { "\x7a" ~ l2 < remoteUeHandlingInformationListValue }
+#[n1.value = remoteUeHandlingInformation.reps]
+remoteUeHandlingInformationListValue = {
+    n1 < remoteUeHandlingInformation{1,16}
+}
+#[l1.value = remoteUeHandlingInformationValue.length]
+remoteUeHandlingInformation = {
+    l1 < remoteUeHandlingInformationValue
+}
+#[n1.value = userId.reps]
+remoteUeHandlingInformationValue = {
+    (n1 < userId{1,15}) ~ bits2
+}
+userId = { byte{1,16} }
+
+smAuthResult = {
+    smAuthResultHdr ~ eapMessage_T6TLVE? ~ extProtoConfOptions_T6TLVE?
+}
+
+smAuthResultHdr = { smHdr ~ "\xc7" }
+
+modifReject = {
+    modifRejectHdr ~ fgsmCauseValue ~ gprsTimer3BackOff_T4TLV? ~ fgsmCongestionReattemptInd_T4TLV? ~ 
+    extProtoConfOptions_T6TLVE?
+}
+
+modifRejectHdr = { smHdr ~ "\xca" }
+
+modifCmd = {
+    modifCmdHdr ~ fgsmCause_T3TV? ~ sessionAmbr_T4TLV? ~ gprsTimerRqTimer_T3TV? ~ 
+    alwaysOnPduSessionInd_T1TV? ~ qosRules_T6TLVE? ~ mappedEpsBearerContexts_T6TLVE? ~ 
+    qosFlowDescriptions_T6TLVE? ~ extProtoConfOptions_T6TLVE?
+}
+
+modifCmdHdr = { smHdr ~ "\xcb" }
+
+sessionAmbr_T4TLV = { "\x2a" ~ sessionAmbr_T4LV }
+
+qosRules_T6TLVE = { "\x7a" ~ qosRules_T6LVE }
+
+releaseReject = {
+    releaseRejectHdr ~ fgsmCauseValue ~ extProtoConfOptions_T6TLVE?
+}
+
+releaseRejectHdr = { smHdr ~ "\xd2" }
+
+releaseCmd = {
+    releaseCmdHdr ~ fgsmCauseValue ~ gprsTimer3BackOff_T4TLV? ~ eapMessage_T6TLVE? ~ 
+    fgsmCongestionReattemptInd_T4TLV? ~ extProtoConfOptions_T6TLVE?
+}
+
+releaseCmdHdr = { smHdr ~ "\xd3"}
+
+fgsmStatus = {
+    fgsmStatusHdr ~ fgsmCauseValue
+}
+
+fgsmStatusHdr = { smHdr ~ "\xd5" }

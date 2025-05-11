@@ -1,0 +1,662 @@
+start = { message }
+message = { emmMessage }
+emmMessage = { attachAccept | attachReject | detachRequestMT | detachAccept | 
+               trackingAreaUpdateAccept | trackingAreaUpdateReject | serviceReject | 
+               serviceAccept | gutiReallocCommand | authRequest | authReject | 
+               identityRequest | securityModeCommand | emmStatus | emmInfomation | 
+               dlNasTransport | csServiceNotification | dlGenericNasTransport}
+
+// TS 124.301, v17.6.0, section 8.2.1
+attachAccept = {
+    attachAcceptHdr ~ epsAttachResult_T1V ~ gprsTimerT3412_T3V ~ taiList_T4LV ~ esmContainer_T6LVE ~
+     guti_T4TLV? ~ lai_T3TV? ~ msId_T4TLV? ~ emmCause_T3TV? ~ gprsTimerT3402_T3TV? ~ 
+    gprsTimerT3423_T3TV? ~ equivPlmnList_T4TLV? ~ emergNumList_T4TLV? ~ epsNetFeat_T4TLV? ~ 
+    addUpdateRes_T1TV? ~ gprsTimer3T3412Ext_T4TLV? ~ gprsTimer2T3324_T4TLV? ~ extDrxParam_T4TLV? ~ 
+    dcnId_T4TLV? ~ smsServStat_T1TV? ~ non3gppNwProvPol_T1TV? ~ gprsTimer2T3448_T4TLV? ~ 
+    networkPol_T1TV? ~ gprsTimer3T3447_T4TLV? ~ extEmergNumList_T6TLVE? ~ cipherKeyData_T6TLVE? ~ 
+    ueRadioCapId_T4TLV? ~ ueRadioCapIdDelInd_T1TV? ~ negotWusAssistInfo_T4TLV? ~ 
+    negotDrxParamInNbs1Mode_T4TLV? ~ negotImsiOffset_T4TLV?
+}
+
+attachAcceptHdr = { emmHdr ~ "\x42" }
+
+emmHdr = { "\x07" }
+// #[self.value = secHdrType.value << 4 | emmPd.value]
+// emmHdr = { secHdrType ~ emmPd }
+// secHdrType = { "\x00" }
+// emmPd = { "\x07" }
+
+// TS 124.301, v17.6.0, section 9.9.3.10
+epsAttachResult_T1V = {
+    "\x01" |  // EPS only
+    "\x02"    // combined EPS/IMSI attach 
+}
+
+// TS 124.008, v17.6.0, section 10.5.7.3
+gprsTimerT3412_T3V = _{ gprsTimerValue }
+#[self.value = timerUnit.value << 5 | timerValue.value]
+gprsTimerValue = { timerUnit ~ timerValue }
+timerUnit = { "\x00" | "\x01" | "\x02" | "\x07"}
+timerValue = { '\x00'..'\x1f' }
+
+// TS 124.301, v17.6.0, section 9.9.3.33
+#[l1.value = taiListValue.length]
+taiList_T4LV = { l1 < taiListValue }
+taiListValue = { partialTaiListChoice{1,16} }  // WARN: some of combinations of 3 choices can exceed
+                                               // maximum length of 96
+partialTaiListChoice = { partialTaiList0 | partialTaiList1 | partialTaiList2 }
+#[n1.value = tac.reps - 1]
+partialTaiList0 = { n1 ~ plmn < tac{1,16} }
+partialTaiList1 = { '\x20'..'\x2f' ~ plmnTac }
+#[n1.value = 0x40 | plmnTac.reps - 1]
+partialTaiList2 = { n1 < plmnTac{1,16} }
+plmnTac = {plmn ~ tac}
+plmn = { numberDigits ~ (numberDigits | bcdNumberDigits) ~ numberDigits }
+tac = { byte{2} }
+
+// TS 124.301, v17.6.0, section 9.9.3.15
+#[l2.value = esmContainerValue.length]
+esmContainer_T6LVE = {l2 < esmContainerValue}
+// TODO: TS 124.301, v17.6.0, section 8.3
+esmContainerValue = { byte{3,600} }
+
+// TS 124.301, v17.6.0, section 9.9.3.12
+#[l1.value = gutiValue.length]
+guti_T4TLV = { "\x50" ~ l1 < gutiValue }
+gutiValue = {
+    "\xf6" ~  // 1 1 1 1; odd/even indic; Type of identity
+    plmn ~ mmeGroupId ~ mmeCode ~ mTmsi
+}
+mmeGroupId = _{ byte{2} }
+mmeCode = _{ byte }
+mTmsi = _{ byte{4} }
+
+// TS 124.008, v17.6.0, section 10.5.1.3
+lai_T3TV = { "\x13" ~ laiValue }
+laiValue = { plmn ~ lac }
+lac = { byte{2} }
+
+// TS 124.008, v17.6.0, section 10.5.1.4
+#[l1.value = msIdValue.length]
+msId_T4TLV = { "\x23" ~ l1 < msIdValue }
+msIdValue = { byte{5,8} }  // DetailsOmitted
+
+// TS 124.301, v17.6.0, section 9.9.3.9
+emmCause_T3TV = { "\x53" ~ emmCauseValue }
+emmCauseValue = {
+    "\x02" |  // IMSI unknown in HSS
+    "\x03" |  // Illegal UE
+    "\x05" |  // IMEI not accepted
+    "\x06" |  // Illegal ME
+    "\x07" |  // EPS services not allowed
+    "\x08" |  // EPS services and non-EPS services not allowed
+    "\x09" |  // UE identity cannot be derived by the network
+    "\x0a" |  // Implicitly detached
+    "\x0b" |  // PLMN not allowed
+    "\x0c" |  // Tracking Area not allowed
+    "\x0d" |  // Roaming not allowed in this tracking area
+    "\x0e" |  // EPS services not allowed in this PLMN
+    "\x0f" |  // No Suitable Cells In tracking area
+    "\x10" |  // MSC temporarily not reachable
+    "\x11" |  // Network failure
+    "\x12" |  // CS domain not available
+    "\x13" |  // ESM failure
+    "\x14" |  // MAC failure
+    "\x15" |  // Synch failure
+    "\x16" |  // Congestion
+    "\x17" |  // UE security capabilities mismatch
+    "\x18" |  // Security mode rejected, unspecified
+    "\x19" |  // Not authorized for this CSG
+    "\x1a" |  // Non-EPS authentication unacceptable
+    "\x23" |  // Requested service option not authorized in this PLMN
+    "\x27" |  // CS service temporarily not available
+    "\x28" |  // No EPS bearer context activated
+    "\x2a" |  // Severe network failure
+    "\x5f" |  // Semantically incorrect message
+    "\x60" |  // Invalid mandatory information
+    "\x61" |  // Message type non-existent or not implemented
+    "\x62" |  // Message type not compatible with the protocol state
+    "\x63" |  // Information element non-existent or not implemented
+    "\x64" |  // Conditional IE error
+    "\x65" |  // Message not compatible with the protocol state
+    "\x6f"    // Protocol error, unspecified
+}
+
+// TS 124.008, v17.6.0, section 10.5.7.3
+gprsTimerT3402_T3TV = { "\x17" ~ gprsTimerValue }
+
+// TS 124.008, v17.6.0, section 10.5.7.3
+gprsTimerT3423_T3TV = { "\x59" ~ gprsTimerValue }
+
+// TS 124.008, v17.6.0, section 10.5.1.13
+#[l1.value = equivPlmnListValue.length]
+equivPlmnList_T4TLV = { "\x4a" ~ l1 < equivPlmnListValue }
+equivPlmnListValue = { plmn{1,15} }
+
+// TS 124.008, v17.6.0, section 10.5.3.13
+#[l1.value = emergNumListValue.length]
+emergNumList_T4TLV = { "\x34" ~ l1 < emergNumListValue }
+emergNumListValue = { emergNumInfo{1, 7} }  // WARN: it may exceed the maximum allowed length, 48.
+#[l1.value = emergNumInfoValue.length]
+emergNumInfo = { l1 < emergNumInfoValue }
+emergNumInfoValue = { emergServCatValue ~ emergNumber }
+emergServCatValue = {
+    "\x01" |  // Police
+    "\x02" |  // Ambulance
+    "\x04" |  // Fire Brigade
+    "\x08" |  // Marine Guard
+    "\x10"    // Mountain Rescue
+}
+emergNumber = { numberDigits{1, 9} ~ (numberDigits | bcdNumberDigits)}
+
+// TS 124.301, v17.6.0, section 9.9.3.12A
+#[l1.value = epsNetFeatValue.length]
+epsNetFeat_T4TLV = { "\x64" ~ l1 < epsNetFeatValue }
+epsNetFeatValue = { byte{1, 2} }
+
+// TS 124.301, v17.6.0, section 9.9.3.0A
+addUpdateRes_T1TV = { '\xf0'..'\xf3' }
+
+// TS 124.008, v17.6.0, section 10.5.7.4a
+#[l1.value = gprsTimer3Value.length]
+gprsTimer3T3412Ext_T4TLV = { "\x5e" ~ l1 < gprsTimer3Value }
+#[self.value = timer3Unit.value << 5 | timer3Value.value]
+gprsTimer3Value = { timer3Unit ~ timer3Value }
+timer3Unit = { "\x00" | "\x01" | "\x02" | "\x03" | "\x04" | "\x05" | "\x06" | "\x07" }
+timer3Value = _{ timerValue }
+
+// TS 124.008, v17.6.0, section 10.5.7.4
+#[l1.value = gprsTimer2Value.length]
+gprsTimer2T3324_T4TLV = { "\x6a" ~ l1 < gprsTimer2Value }
+gprsTimer2Value = _{ gprsTimerValue }
+
+// TS 124.008, v17.6.0, section 10.5.5.32
+#[l1.value = extDrxParamValue.length]
+extDrxParam_T4TLV = { "\x6e" ~ l1 < extDrxParamValue }
+extDrxParamValue = { byte }
+
+// TS 124.008, v17.6.0, section 10.5.5.35
+#[l1.value = dcnIdValue.length]
+dcnId_T4TLV = { "\x65" ~ l1 < dcnIdValue }
+dcnIdValue = { byte{2} }
+
+// TS 124.301, v17.6.0, section 9.9.3.4B
+smsServStat_T1TV = {
+    "\xe0" |  // SMS services not available
+    "\xe1" |  // SMS services not available in this PLMN
+    "\xe2" |  // Network failure
+    "\xe3"    // Congestion
+}
+
+// TS 124.008, v17.6.0, section 10.5.5.37
+non3gppNwProvPol_T1TV = {
+    "\xd0" |  //use of non-3GPP emergency numbers not permitted
+    "\xd1"    //use of non-3GPP emergency numbers permitted
+}
+
+// TS 124.008, v17.6.0, section 10.5.7.4
+#[l1.value = gprsTimer2Value.length]
+gprsTimer2T3448_T4TLV = { "\x6b" ~ l1 < gprsTimer2Value }
+
+// TS 124.301, v17.6.0, section 9.9.3.52
+networkPol_T1TV = { 
+    "\xc0" |  // Unsecured redirection to GERAN allowed
+    "\xc1"    // Unsecured redirection to GERAN not allowed
+}
+
+// TS 124.008, v17.6.0, section 10.5.7.4a
+#[l1.value = gprsTimer3Value.length]
+gprsTimer3T3447_T4TLV = { "\x6c" ~ l1 < gprsTimer3Value }
+
+// TS 124.301, v17.6.0, section 9.9.3.37A
+#[l2.value = extEmergNumListValue.length]
+extEmergNumList_T6TLVE = { "\x7a" ~ l2 < extEmergNumListValue }
+// WARM: not sure how much of input size fuzzer can handle
+extEmergNumListValue = { bit ~ extEmergNumListInfo{1,100} }
+extEmergNumListInfo = { extEmergNumInfo ~ subService }
+#[l1.value = emergNumber.length]
+extEmergNumInfo = { l1 < emergNumber }
+#[l1.value = subServiceValue.length]
+subService = { l1 < subServiceValue }
+// WARM: the length is not limited by the specification
+subServiceValue = { ASCII_ALPHANUMERIC{0,100} }
+
+// TS 124.301, v17.6.0, section 9.9.3.56
+#[l2.value = cipherKeyDataValue.length]
+cipherKeyData_T6TLVE = { "\x7c" ~ l2 < cipherKeyDataValue }
+cipherKeyDataValue = { cipherDataSet{1,16} }
+cipherDataSet = { cipherSetId ~ cipherKey ~ c0 ~ posSib ~ validityStartTime ~ validityDuration ~ (taiList_T4LV | "\x00") }
+cipherSetId = _{ byte{2} }
+cipherKey = _{ byte{16} }
+#[l1.value = c0Value.length]
+c0 = { l1 < c0Value }
+c0Value = { byte{1,16} }
+posSib = _{ byte{4} }  // WARN: last byte has spare bits 5 to 1
+validityStartTime = _{ year ~ month ~ day ~ hour ~ minute }
+year = _{ byte }
+month = _{ '\x01'..'\x0c' }
+day = _{ '\x01'..'\x1f' }
+hour = _{ '\x00'..'\x18' }
+minute = _{ '\x00'..'\x3b' }
+validityDuration = _{ byte{2} }
+
+// TS 124.501, v17.6.0, section 9.11.3.69
+ueRadioCapIdDelInd_T1TV = {
+    "\xb0" |  // UE radio capability ID deletion not requested
+    "\xb1"    // Network-assigned UE radio capability IDs deletion requested
+}
+
+// TS 124.301, v17.6.0, section 9.9.3.62
+#[l1.value = negotWusAssistInfoValue.length]
+negotWusAssistInfo_T4TLV = { "\x35" ~ l1 < negotWusAssistInfoValue }
+negotWusAssistInfoValue = { wusAssistInfoType{1,10} }  // WARN: the maximum number of elements is 
+                                                       // unknown
+wusAssistInfoType = { '\x00'..'\x14' }
+
+// TS 124.301, v17.6.0, section 9.9.3.63
+#[l1.value = negotDrxParamInNbs1ModeValue.length]
+negotDrxParamInNbs1Mode_T4TLV = { "\x36" ~ l1 < negotDrxParamInNbs1ModeValue }
+negotDrxParamInNbs1ModeValue = { '\x00'..'\x06' }
+
+// TS 124.301, v17.6.0, section 9.9.3.64
+#[l1.value = negotImsiOffsetValue.length]
+negotImsiOffset_T4TLV = { "\x38" ~ l1 < negotImsiOffsetValue }
+negotImsiOffsetValue = { byte{2} }
+
+byte = _{ '\x00'..'\xff' }
+numberDigit = { '\x00'..'\x09' }
+l1 = _{ "L" }
+l2 = _{ "LL" }
+n1 = _{ "N" }
+
+// TS 124.301, v17.6.0, section 8.2.3
+attachReject = {
+    attachRejectHdr ~ emmCause_T3V ~ esmContainer_T6LVE? ~ gprsTimer2T3346_T4TLV? ~ 
+    gprsTimer2T3402_T4TLV? ~ extEmmCause_T1TV?
+}
+
+attachRejectHdr = { emmHdr ~ "\x44" }
+
+// TS 124.301, v17.6.0, section 9.9.3.9
+emmCause_T3V = _{ emmCauseValue }
+
+// TS 124.008, v17.6.0, section 10.5.7.4
+#[l1.value = gprsTimer2Value.length]
+gprsTimer2T3346_T4TLV = { "\x5f" ~ l1 < gprsTimer2Value }
+
+// TS 124.008, v17.6.0, section 10.5.7.4
+#[l1.value = gprsTimer2Value.length]
+gprsTimer2T3402_T4TLV = { "\x16" ~ l1 < gprsTimer2Value }
+
+// TS 124.301, v17.6.0, section 9.9.3.26A
+extEmmCause_T1TV = { '\xa0'..'\xa7' }
+
+// TS 124.301, v17.6.0, section 8.2.11.2
+detachRequestMT = {
+    detachRequestMTHdr ~ detachType_T1V ~ emmCause_T3TV?
+}
+
+detachRequestMTHdr = { emmHdr ~ "\x45" }
+
+// TS 124.301, v17.6.0, section 9.9.3.7
+detachType_T1V = _{ detachTypeValue }
+detachTypeValue = { 
+    "\x01" |  // re-attach required 
+    "\x02" |  // re-attach not required 
+    "\x03" |  // IMSI detach 
+    "\x06" |  // reserved
+    "\x07"    // reserved
+}
+
+// TS 124.301, v17.6.0, section 8.2.10.1
+detachAccept = {
+    detachAcceptHdr
+}
+
+detachAcceptHdr = { emmHdr ~ "\x46" }
+
+// TS 124.301, v17.6.0, section 8.2.26
+trackingAreaUpdateAccept = {
+    trackingAreaUpdateAcceptHdr ~ epsUpdateResult_T1V ~ 
+    gprsTimerT3412_T3TV? ~ guti_T4TLV? ~ taiList_T4LV? ~ epsBearerCtxtStat_T4TLV? ~ lai_T3TV? ~ 
+    msId_T4TLV? ~ emmCause_T3TV? ~ gprsTimerT3402_T3TV? ~ gprsTimerT3423_T3TV? ~ 
+    equivPlmnList_T4TLV? ~ emergNumList_T4TLV? ~ epsNetFeat_T4TLV? ~ addUpdateRes_T1TV? ~ 
+    gprsTimer3T3412Ext_T4TLV? ~ gprsTimer2T3324_T4TLV? ~ extDrxParam_T4TLV? ~ hdrCompCfgStat_T4TLV? 
+    ~ dcnId_T4TLV? ~ smsServStat_T1TV? ~ non3gppNwProvPol_T1TV? ~ gprsTimer2T3448_T4TLV? ~ 
+    networkPol_T1TV? ~ gprsTimer3T3447_T4TLV? ~ extEmergNumList_T6TLVE? ~ cipherKeyData_T6TLVE? ~ 
+    ueRadioCapId_T4TLV? ~ ueRadioCapIdDelInd_T1TV? ~ negotWusAssistInfo_T4TLV? ~ 
+    negotDrxParamInNbs1Mode_T4TLV? ~ negotImsiOffset_T4TLV? ~ epsAddReqRes_T4TLV?
+}
+
+trackingAreaUpdateAcceptHdr = { emmHdr ~ "\x49" }
+
+// TS 124.301, v17.6.0, section 9.9.3.13
+epsUpdateResult_T1V = { 
+    "\x00" |  // TA updated
+    "\x01" |  // combined TA/LA updated
+    "\x04" |  // TA updated and ISR activated
+    "\x05"    // combined TA/LA updated and ISR activated
+}
+
+// TS 124.008, v13.7.0, section 10.5.7.3
+gprsTimerT3412_T3TV = { "\x5a" ~ gprsTimerValue }
+
+// TS 124.301, v17.6.0, section 9.9.2.1
+#[l1.value = epsBearerCtxtStatValue.length]
+epsBearerCtxtStat_T4TLV = { "\x57" ~ l1 < epsBearerCtxtStatValue }
+#[octet3.value &= "\xfe"]
+epsBearerCtxtStatValue = { octet3 ~ byte }
+octet3 = { byte }
+
+// TS 124.301, v17.6.0, section 9.9.4.27
+#[l1.value = hdrCompCfgStatValue.length]
+hdrCompCfgStat_T4TLV = { "\x68" ~ l1 < hdrCompCfgStatValue }
+#[octet3.value &= "\xfe"]
+hdrCompCfgStatValue = { octet3 ~ byte }
+
+// TS 124.501, v17.6.0, section 9.11.3.68
+#[l1.value = ueRadioCapIdValue.length]
+ueRadioCapId_T4TLV = { "\x66" ~ l1 < ueRadioCapIdValue }
+// TS 123.003, v17.6.0, section 29.2
+ueRadioCapIdValue = { byte{11} }
+
+// TS 124.301, v17.6.0, section 9.9.3.67
+#[l1.value = epsAddReqResValue.length]
+epsAddReqRes_T4TLV = { "\x37" ~ l1 < epsAddReqResValue }
+epsAddReqResValue = {
+    "\x00" |  // no additional information
+    "\x01" |  // paging restriction is accepted
+    "\x02"    // paging restriction is rejected
+}
+
+#[self.value = firstNumberDigit.value << 4 | secondNumberDigit.value]
+numberDigits = { firstNumberDigit ~ secondNumberDigit }
+firstNumberDigit = _{ numberDigit }
+secondNumberDigit = _{ numberDigit }
+#[self.value = "\xf0" | numberDigit.value]
+bcdNumberDigits = { numberDigit }
+
+// TS 124.301, v17.6.0, section 8.2.28
+trackingAreaUpdateReject = {
+    trackingAreaUpdateRejectHdr ~ emmCause_T3V ~ gprsTimer2T3346_T4TLV? ~ extEmmCause_T1TV?
+}
+
+trackingAreaUpdateRejectHdr = { emmHdr ~ "\x4b" }
+
+// TS 124.301, v17.6.0, section 8.2.24
+serviceReject = {
+    serviceRejectHdr ~ emmCause_T3V ~ gprsTimerT3442_T3TV? ~ gprsTimer2T3346_T4TLV? ~ 
+    gprsTimer2T3448_T4TLV?
+}
+
+serviceRejectHdr = { emmHdr ~ "\x4e" }
+
+// TS 124.008, v17.6.0, section 10.5.7.3
+gprsTimerT3442_T3TV = { "\x5b" ~ gprsTimerValue }
+
+// TS 124.301, v17.6.0, section 8.2.34
+serviceAccept = {
+    serviceAcceptHdr ~ epsBearerCtxtStat_T4TLV? ~ gprsTimer2T3448_T4TLV? ~ epsAddReqRes_T4TLV?
+    
+}
+
+serviceAcceptHdr = { emmHdr ~ "\x4f" }
+
+// TS 124.301, v17.6.0, section 8.2.16
+gutiReallocCommand = {
+    gutiReallocCommandHdr ~ guti_T4LV ~ taiList_T4LV? ~ dcnId_T4TLV? ~ ueRadioCapId_T4TLV? ~ 
+    ueRadioCapIdDelInd_T1TV?
+}
+
+gutiReallocCommandHdr = { emmHdr ~ "\x50" }
+
+// TS 124.301, v17.6.0, section 9.9.3.12
+#[l1.value = gutiValue.length]
+guti_T4LV = { l1 < gutiValue }
+
+// TS 124.301, v17.6.0, section 8.2.7
+authRequest = {
+    authReqeustHdr ~ nasKsi_T1V ~ rand_T3V ~ autn_T4LV
+}
+
+authReqeustHdr = { emmHdr ~ "\x52" }
+
+// TS 124.301, v17.6.0, section 9.9.3.21
+nasKsi_T1V = { nibble }
+
+// TS 124.008, v17.6.0, section 10.5.3.1
+rand_T3V = { byte{16} }
+
+// TS 124.008, v17.6.0, section 10.5.3.1.1
+#[l1.value = autnValue.length]
+autn_T4LV = { l1 < autnValue }
+autnValue = { sqnXorAk ~ amf ~ mac }
+sqnXorAk = { byte{6} }
+amf = { byte{2} }
+mac = { byte{8} }
+
+// TS 124.301, v17.6.0, section 8.2.6
+authReject = {
+    authRejectHdr
+}
+
+authRejectHdr = { emmHdr ~ "\x54" }
+
+// TS 124.301, v17.6.0, section 8.2.18
+identityRequest = {
+    identityRequestHdr ~ identityType_T2V
+}
+
+identityRequestHdr = { emmHdr ~ "\x55" }
+
+// TS 124.008, v17.6.0, section 10.5.5.9
+identityType_T2V = {
+    "\x01" |  // IMSI
+    "\x02" |  // IMEI
+    "\x03" |  // IMEISV
+    "\x04"    // TMSI
+}
+
+// TS 124.301, v17.6.0, section 8.2.20
+securityModeCommand = {
+    securityModeCommandHdr ~ nasSecAlgo_T3V ~ nasKsi_T1V ~ ueSecCap_T4LV ~ 
+    imeisvReq_T1TV? ~ nonceUe_T3TV? ~ nonceMme_T3TV? ~ hashMme_T4TLV? ~ 
+    ueAddSecCap_T4TLV? ~ ueRadioCapIdReq_T4TLV?
+}
+
+securityModeCommandHdr = { emmHdr ~ "\x5d" }
+
+// TS 124.301, v17.6.0, section 9.9.3.23
+#[self.value = "\x77" & byte.value]
+nasSecAlgo_T3V = { byte }
+
+// TS 124.301, v17.6.0, section 9.9.3.36
+#[l1.value = ueSecCapValue.length]
+ueSecCap_T4LV = { l1 < ueSecCapValue }
+ueSecCapValue = { eea ~ eia ~ (uea ~ uia ~ gea?)? }
+eea = { byte }
+eia = { byte }
+uea = { byte }
+uia = { bits7 }
+gea = { bits7 }
+
+// TS 124.008, v17.6.0, section 10.5.5.10
+imeisvReq_T1TV = {
+    "\xc0" |  // IMEISV not requested
+    "\xc1"    // IMEISV requested
+}
+
+// TS 124.301, v17.6.0, section 9.9.3.25
+nonceUe_T3TV = { "\x55" ~ byte{4} }
+
+// TS 124.301, v17.6.0, section 9.9.3.25
+nonceMme_T3TV = { "\x56" ~ byte{4} }
+
+// TS 124.301, v17.6.0, section 9.9.3.50
+#[l1.value = hashMmeValue.length]
+hashMme_T4TLV = { "\x4f" ~ l1 < hashMmeValue }
+hashMmeValue = { byte{8} }
+
+// TS 124.301, v17.6.0, section 9.9.3.53
+#[l1.value = ueAddSecCapValue.length]
+ueAddSecCap_T4TLV = { "\x6f" ~ l1 < ueAddSecCapValue }
+ueAddSecCapValue = { byte{4} }
+
+// TS 124.301, v17.6.0, section 9.9.3.59
+#[l1.value = ueRadioCapIdReqValue.length]
+ueRadioCapIdReq_T4TLV = { "\x37" ~ l1 < ueRadioCapIdReqValue }
+ueRadioCapIdReqValue = {
+    "\x00" |  // UE radio capability ID not requested
+    "\x01"    // UE radio capability ID requested
+}
+
+nibble = _{ '\x00'..'\x0f' }
+bits7 = _{ '\x00'..'\x7f' }
+bit = _{ "\x00" | "\x01" }
+
+// TS 124.301, v17.6.0, section 8.2.14
+emmStatus = {
+    emmStatusHdr ~ emmCause_T3V
+}
+
+emmStatusHdr = { emmHdr ~ "\x60" }
+
+// TS 124.301, v17.6.0, section 8.2.13
+emmInfomation = {
+    emmInformationHdr ~ fullNetName_T4TLV? ~ shortNetName_T4TLV? ~ localTimeZone_T3TV? ~ 
+    univTimeAndTimeZone_T3TV? ~ dlSavingTime_T4TLV?
+}
+
+emmInformationHdr = { emmHdr ~ "\x61" }
+
+// TS 124.008, v17.6.0, section 10.5.3.5a
+#[l1.value = fullNetNameValue.length]
+fullNetName_T4TLV = { "\x43" ~ l1 < fullNetNameValue }
+fullNetNameValue = { '\x80'..'\xff' ~ byte{0,254} }
+
+// TS 124.008, v17.6.0, section 10.5.3.5a
+#[l1.value = fullNetNameValue.length]
+shortNetName_T4TLV = { "\x45" ~ l1 < fullNetNameValue }
+
+// TS 124.008, v17.6.0, section 10.5.3.8
+localTimeZone_T3TV = { "\x46" ~ byte }
+
+// TS 124.008, v17.6.0, section 10.5.3.9
+univTimeAndTimeZone_T3TV = { "\x47" ~ byte{7} }
+
+// TS 124.008, v17.6.0, section 10.5.3.12
+#[l1.value = dlSavingTimeValue.length]
+dlSavingTime_T4TLV = { "\x49" ~ l1 < dlSavingTimeValue }
+dlSavingTimeValue = {
+    "\x00" |  // No adjustment for Daylight Saving Time
+    "\x01" |  // +1 hour adjustment for Daylight Saving Time
+    "\x02" |  // +2 hours adjustment for Daylight Saving Time 
+    "\x03"    // Reserved
+}
+
+// TS 124.301, v17.6.0, section 8.2.12
+dlNasTransport = {
+    dlNasTransportHdr ~ nasContainer_T4LV
+}
+
+dlNasTransportHdr = { emmHdr ~ "\x62" }
+
+// TS 124.011, v17.6.0, section 7.2
+#[l1.value = nasContainerValue.length]
+nasContainer_T4LV = { l1 < nasContainerValue }
+nasContainerValue = {
+    cpData | cpAck | cpError
+}
+
+// TS 124.011, v17.6.0, section 7.2.1
+cpData = {
+    nasContainerHdr ~ "\x01" ~ cpUserData_T4LV
+}
+#[self.value = ti.value << 4 | smsMsgPd.value]
+nasContainerHdr = { ti ~ smsMsgPd }
+// TS 124.007, v17.6.0, section 11.2.3.1.3
+ti = { nibble }
+// TS 124.007, v17.6.0, section 11.2.3.1.1
+smsMsgPd = { "\x09" }
+
+// TS 124.011, v17.6.0, section 8.1.4.1
+#[l1.value = cpUserDataValue.length]
+cpUserData_T4LV = { l1 < cpUserDataValue }
+cpUserDataValue = { byte{,248} }
+
+// TS 124.011, v17.6.0, section 7.2.2
+cpAck = {
+    nasContainerHdr ~ "\x04"
+}
+
+// TS 124.011, v17.6.0, section 7.2.3
+cpError = {
+    nasContainerHdr ~ "\x10" ~ cpCause_T3V
+}
+
+// TS 124.011, v17.6.0, section 8.1.4.2
+cpCause_T3V = {
+    "\x11" |  // Network failure
+    "\x16" |  // Congestion
+    "\x51" |  // Invalid Transaction Identifier value
+    "\x5f" |  // Semantically incorrect message
+    "\x60" |  // Invalid mandatory information
+    "\x61" |  // Message type non-existent or not implemented
+    "\x62" |  // Message not compatible with the short message protocol state
+    "\x63" |  // Information element non-existent or not implemented 
+    "\x6f"    // Protocol error, unspecified
+}
+
+// TS 124.301, v17.6.0, section 8.2.9
+csServiceNotification = {
+    csServiceNotificationHdr ~ pagingIdentity_T3V ~ cli_T4TLV? ~ ssCode_T3TV? ~ lcsInd_T3TV? ~ 
+    lcsClientId_T4TLV?
+}
+
+csServiceNotificationHdr = { emmHdr ~ "\x64" }
+
+// TS 124.301, v17.6.0, section 9.9.3.25A
+pagingIdentity_T3V = {
+    "\x00" |  // IMSI
+    "\x01"    // TMSI
+}
+
+// TS 124.008, v17.6.0, section 10.5.4.9
+#[l1.value = cliValue.length]
+cli_T4TLV = { "\x60" ~ l1 < cliValue }
+cliValue = {
+    byte{2} ~  // DetailsOmitted
+    numberDigits{9} ~ (numberDigits | bcdNumberDigits)
+}
+
+// TS 124.301, v17.6.0, section 9.9.3.39
+ssCode_T3TV = { "\x61" ~ ssCodeValue }
+ssCodeValue = { byte }  // DetailsOmitted
+
+// TS 124.301, v17.6.0, section 9.9.3.40
+lcsInd_T3TV = { "\x62" ~ lcsIndValue }
+lcsIndValue = { byte }  // DetailsOmitted
+
+// TS 124.301, v17.6.0, section 9.9.3.41
+#[l1.value = lcsClientIdValue.length]
+lcsClientId_T4TLV = { "\x63" ~ l1 < lcsClientIdValue }
+lcsClientIdValue = { byte{1,255} }  // DetailsOmitted
+
+// TS 124.301, v17.6.0, section 8.2.31
+dlGenericNasTransport = {
+    dlGenericNasTransportHdr ~ genericContType_T3V ~ genericContainer_T6LVE ~ addInfo_T4TLV?
+}
+
+dlGenericNasTransportHdr = { emmHdr ~ "\x68" }
+
+// TS 124.301, v17.6.0, section 9.9.3.42
+genericContType_T3V = { byte }
+
+// TS 124.301, v17.6.0, section 9.9.3.43
+#[l2.value = genericContainerValue.length]
+genericContainer_T6LVE = { l2 < genericContainerValue }
+// TODO
+genericContainerValue = { byte{3,600} }
+
+// TS 124.301, v17.6.0, section 9.9.2.0
+addInfo_T4TLV = { "" }  // DetailsOmitted, depends on genericContainer_T6LVE
