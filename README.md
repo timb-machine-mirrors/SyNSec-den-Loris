@@ -4,5 +4,5 @@ See the README file in each subdirectory ([analyzer](https://github.com/SyNSec-d
 For details, please check out our paper, "Stateful Analysis and Fuzzing of Commercial Baseband Firmware" (IEEE S&P 2025).
 
 ## BibTex
-<a href="#"> <img title="" src="https://github.com/user-attachments/assets/28481502-f3d8-4eba-9f40-98f290b4e08f" alt="Loris thumbnail" align="right" width="200"></a>
+<a href="https://syed-rafiul-hussain.github.io/wp-content/uploads/2025/05/Loris_baseband_fuzzing_sp25.pdf"> <img title="" src="https://github.com/user-attachments/assets/28481502-f3d8-4eba-9f40-98f290b4e08f" alt="Loris thumbnail" align="right" width="200"></a>
 If you are using Loris in an academic paper please use this to cite it:
